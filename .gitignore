@@ -1,0 +1,38 @@
+# Gradle build outputs
+.gradle/
+build/
+app/build/
+*/build/
+
+# Local configuration (machine-specific, never commit)
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Keystore / signing secrets (NEVER commit)
+*.jks
+*.keystore
+keystore.properties
+release.properties
+
+# ProGuard
+proguard/
+
+# External native build
+.externalNativeBuild/
+.cxx/
+
+# Android Studio profiler captures
+captures/
+
+# VS Code
+.vscode/

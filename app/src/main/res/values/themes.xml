@@ -1,0 +1,8 @@
+<resources>
+    <!--
+        The Activity uses this theme before Compose takes over.
+        NoActionBar so Compose has full control of the window.
+    -->
+    <style name="Theme.HighSpeedCamera"
+        parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
