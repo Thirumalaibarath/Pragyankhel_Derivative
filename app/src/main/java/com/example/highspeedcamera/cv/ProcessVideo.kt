@@ -11,21 +11,9 @@ import org.opencv.videoio.Videoio
 import kotlin.math.log10
 import kotlin.math.pow
 
-enum class FrameStatus {
-    NORMAL,
-    FRAME_DROP,
-    FRAME_MERGE
-}
+enum class FrameStatus { NORMAL, FRAME_DROP, FRAME_MERGE }
+enum class DropReason { NONE, DELTA_TIME, HIGH_PSNR, LOW_MEAN_THRESHOLD }
 
-// Added the diagnostic enum
-enum class DropReason {
-    NONE,
-    DELTA_TIME,
-    HIGH_PSNR,
-    LOW_MEAN_THRESHOLD
-}
-
-// Added dropReason to the report
 data class FrameReport(
     val timestampMs: Double,
     val status: FrameStatus,
@@ -35,6 +23,7 @@ data class FrameReport(
 )
 
 data class FrameStats(val mean: Double, val stdDev: Double, val psnr: Double)
+data class NoiseBaseline(val mu: Double, val sigma: Double)
 
 private class FrameState {
     val img = Mat()
@@ -70,95 +59,122 @@ fun calculateStats(prev: Mat, curr: Mat): FrameStats {
     return FrameStats(mu, sigma, psnrVal)
 }
 
-// Refactored to return the exact reason instead of a boolean
-fun getDropReason(stats: FrameStats): DropReason {
-    if (stats.psnr > 50.0) return DropReason.HIGH_PSNR
-
-    val isStatic = stats.mean < (0.25 * stats.stdDev)
-    val isNegligible = stats.mean < 0.08
-
-    if (isStatic || isNegligible) return DropReason.LOW_MEAN_THRESHOLD
-
-    return DropReason.NONE
-}
-
 fun calculateSharpness(frame: Mat): Double {
-    val destination = Mat()
-    val mean = MatOfDouble()
-    val stdDev = MatOfDouble()
+    val dest = Mat()
+    val m = MatOfDouble()
+    val s = MatOfDouble()
 
-    Imgproc.Laplacian(frame, destination, CvType.CV_64F)
+    Imgproc.Laplacian(frame, dest, CvType.CV_64F)
+    Core.meanStdDev(dest, m, s)
+    val variance = s.get(0, 0)[0].pow(2.0)
 
-    Core.meanStdDev(destination, mean, stdDev)
-    val variance = stdDev.get(0, 0)[0].pow(2.0)
-
-    destination.release()
-    mean.release()
-    stdDev.release()
+    dest.release()
+    m.release()
+    s.release()
 
     return variance
 }
 
+fun calibrateNoiseFloor(videoPath: String, sampleFrames: Int = 15): NoiseBaseline {
+    val capture = VideoCapture(videoPath)
+    val prev = Mat()
+    val curr = Mat()
+    val muSamples = mutableListOf<Double>()
+    val sigmaSamples = mutableListOf<Double>()
+    var count = 0
+
+    while (count < sampleFrames && capture.read(curr)) {
+        if (curr.empty()) break
+
+        val gray = Mat()
+        when (curr.channels()) {
+            3 -> Imgproc.cvtColor(curr, gray, Imgproc.COLOR_BGR2GRAY)
+            4 -> Imgproc.cvtColor(curr, gray, Imgproc.COLOR_BGRA2GRAY)
+            else -> curr.copyTo(gray)
+        }
+        Imgproc.GaussianBlur(gray, gray, Size(3.0, 3.0), 0.0)
+
+        if (!prev.empty()) {
+            val stats = calculateStats(prev, gray)
+            if (stats.mean < 1.0) {
+                muSamples.add(stats.mean)
+                sigmaSamples.add(stats.stdDev)
+            }
+        }
+        gray.copyTo(prev)
+        gray.release()
+        count++
+    }
+
+    capture.release()
+    prev.release()
+    curr.release()
+
+    val avgMu = if (muSamples.isNotEmpty()) muSamples.average() else 0.05
+    val avgSigma = if (sigmaSamples.isNotEmpty()) sigmaSamples.average() else 0.02
+
+    return NoiseBaseline(avgMu, avgSigma)
+}
+
 fun processVideo(videoPath: String): List<FrameReport> {
+    val baseline = calibrateNoiseFloor(videoPath)
     val reportList = mutableListOf<FrameReport>()
     val capture = VideoCapture(videoPath)
 
     if (!capture.isOpened) return reportList
 
     val fps = capture.get(Videoio.CAP_PROP_FPS)
-    val interval = 1000.0 / fps // Expected Delta T in ms
+    val interval = 1000.0 / fps
 
     val prevFrame = FrameState()
     val currFrame = FrameState()
     val nextFrame = FrameState()
 
     fun prepareFrame(sourceMat: Mat, targetState: FrameState, timestamp: Double) {
-//        Imgproc.cvtColor(sourceMat, targetState.img, Imgproc.COLOR_BGR2GRAY)
+        if (sourceMat.empty()) return
+        when (sourceMat.channels()) {
+            3 -> Imgproc.cvtColor(sourceMat, targetState.img, Imgproc.COLOR_BGR2GRAY)
+            4 -> Imgproc.cvtColor(sourceMat, targetState.img, Imgproc.COLOR_BGRA2GRAY)
+            else -> sourceMat.copyTo(targetState.img)
+        }
         Imgproc.GaussianBlur(targetState.img, targetState.img, Size(3.0, 3.0), 0.0)
-
         targetState.sharpness = calculateSharpness(targetState.img)
         targetState.timestamp = timestamp
     }
 
     if (capture.read(currFrame.img)) {
-        val ts = capture.get(Videoio.CAP_PROP_POS_MSEC)
-        prepareFrame(currFrame.img, currFrame, ts)
+        prepareFrame(currFrame.img, currFrame, capture.get(Videoio.CAP_PROP_POS_MSEC))
     }
 
     while (capture.read(nextFrame.img)) {
-        val currentMs = capture.get(Videoio.CAP_PROP_POS_MSEC)
-        prepareFrame(nextFrame.img, nextFrame, currentMs)
+        val ts = capture.get(Videoio.CAP_PROP_POS_MSEC)
+        prepareFrame(nextFrame.img, nextFrame, ts)
 
-        if (!prevFrame.img.empty()) {
+        if (!prevFrame.img.empty() && !currFrame.img.empty()) {
             val delta = currFrame.timestamp - prevFrame.timestamp
             val stats = calculateStats(prevFrame.img, currFrame.img)
 
-            // Evaluate drop reason
-            val visualDropReason = getDropReason(stats)
+            var status = FrameStatus.NORMAL
+            var reason = DropReason.NONE
 
-            var currentStatus = FrameStatus.NORMAL
-            var currentDropReason = DropReason.NONE
+            val dynamicThreshold = baseline.mu + (2.0 * stats.stdDev)
 
-            // Hierarchical classification
             if (delta > (interval * 1.5)) {
-                currentStatus = FrameStatus.FRAME_DROP
-                currentDropReason = DropReason.DELTA_TIME
-            } else if (visualDropReason != DropReason.NONE) {
-                currentStatus = FrameStatus.FRAME_DROP
-                currentDropReason = visualDropReason
+                status = FrameStatus.FRAME_DROP
+                reason = DropReason.DELTA_TIME
+            } else if (stats.psnr > 45.0) {
+                status = FrameStatus.FRAME_DROP
+                reason = DropReason.HIGH_PSNR
+            } else if (stats.mean < dynamicThreshold) {
+                status = FrameStatus.FRAME_DROP
+                reason = DropReason.LOW_MEAN_THRESHOLD
             } else if (stats.mean > 1.5 &&
                 currFrame.sharpness < (prevFrame.sharpness * 0.4) &&
                 currFrame.sharpness < (nextFrame.sharpness * 0.4)) {
-                currentStatus = FrameStatus.FRAME_MERGE
+                status = FrameStatus.FRAME_MERGE
             }
 
-            reportList.add(FrameReport(
-                timestampMs = currFrame.timestamp,
-                status = currentStatus,
-                dropReason = currentDropReason,
-                sharpness = currFrame.sharpness,
-                motionMean = stats.mean
-            ))
+            reportList.add(FrameReport(currFrame.timestamp, status, reason, currFrame.sharpness, stats.mean))
         }
 
         currFrame.img.copyTo(prevFrame.img)
