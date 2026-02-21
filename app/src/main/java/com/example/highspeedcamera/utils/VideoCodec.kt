@@ -8,7 +8,6 @@ enum class VideoCodec(val displayName: String, val mimeType: String) {
     AV1 ("AV1",          MediaFormat.MIMETYPE_VIDEO_AV1);
 
     companion object {
-        // Numeric IDs kept for EncoderWrapper
         const val ID_HEVC = 0
         const val ID_H264 = 1
         const val ID_AV1  = 2

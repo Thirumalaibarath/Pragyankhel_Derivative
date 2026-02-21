@@ -173,9 +173,10 @@ class EncoderWrapper(
             val handler = mEncoderThread!!.getHandler()
             handler.sendMessage(handler.obtainMessage(EncoderThread.EncoderHandler.MSG_SHUTDOWN))
             try { mEncoderThread!!.join() }
-            catch (ie: InterruptedException) { Log.w(TAG, "Encoder thread join interrupted", ie) }
-            mEncoder!!.stop()
-            mEncoder!!.release()
+            catch (ie: InterruptedException) {
+                Log.w(TAG, "Encoder thread join interrupted", ie)
+                try { mEncoderThread!!.join() } catch (_: InterruptedException) {}
+            }
             true
         }
     }
@@ -209,6 +210,7 @@ class EncoderWrapper(
         var mFrameNum = 0
         val mLock = Object()
         @Volatile var mReady = false
+        @Volatile var mReleased = false  // true once mEncoder has been released
 
         override fun run() {
             if (mIsHighSpeed) Process.setThreadPriority(Process.THREAD_PRIORITY_VIDEO)
@@ -282,8 +284,13 @@ class EncoderWrapper(
 
         fun frameAvailable() {
             if (VERBOSE) Log.d(TAG, "frameAvailable")
-            if (drainEncoder()) {
-                synchronized(mLock) { mFrameNum++; mLock.notify() }
+            if (mReleased) return
+            try {
+                if (drainEncoder()) {
+                    synchronized(mLock) { mFrameNum++; mLock.notify() }
+                }
+            } catch (e: IllegalStateException) {
+                Log.w(TAG, "frameAvailable: codec already released, skipping drain")
             }
         }
 
@@ -336,6 +343,9 @@ class EncoderWrapper(
                 Log.w(TAG, "No video track — nothing was written to muxer")
                 mMuxer.release()
             }
+            mReleased = true
+            try { mEncoder.stop()    } catch (e: Exception) { Log.w(TAG, "encoder stop", e) }
+            try { mEncoder.release() } catch (e: Exception) { Log.w(TAG, "encoder release", e) }
             Looper.myLooper()!!.quit()
         }
 

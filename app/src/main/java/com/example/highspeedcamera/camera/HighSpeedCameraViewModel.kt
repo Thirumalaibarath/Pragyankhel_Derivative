@@ -137,7 +137,7 @@ class HighSpeedCameraViewModel(application: Application) : AndroidViewModel(appl
                 ).also { it.acquire(30 * 60 * 1000L) }
 
                 encoder?.start()
-                frameGate = true               // open the gate: onCaptureCompleted may now call frameAvailable()
+                frameGate = true
                 _recordingState.value = RecordingState.RECORDING
                 Log.d(TAG, "Recording started at $fps fps")
             } catch (e: Exception) {

@@ -16,8 +16,7 @@ import com.example.highspeedcamera.utils.VideoCodec
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
-// Shared slider colour tokens
-private val SliderThumbColor        = Color(0xFF444444)   // dark grey thumb
+private val SliderThumbColor        = Color(0xFF444444)
 private val SliderActiveTrack       = Color.White
 private val SliderInactiveTrack     = Color.White.copy(alpha = 0.30f)
 private val SliderActiveTickColor   = Color.Transparent
@@ -62,7 +61,6 @@ fun ConfigScreen(
                         onClick  = {
                             viewModel.selectedCamera.value = option
                             viewModel.selectedDynamicRange.value = option.supportedDynamicRanges.first()
-                            // Reset ISO to midpoint and shutter to 1/fps for new camera
                             viewModel.selectedIso.value = ((option.isoRange.lower + option.isoRange.upper) / 2)
                             viewModel.selectedShutterNs.value = 1_000_000_000L / option.fps
                         }

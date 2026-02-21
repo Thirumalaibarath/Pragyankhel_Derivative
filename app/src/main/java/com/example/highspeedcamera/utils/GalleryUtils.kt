@@ -28,10 +28,20 @@ fun saveToGallery(
     iso: Int = 400,
     shutterNs: Long = 1_000_000_000L / 120
 ): Uri? {
-    val timestamp   = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+    val timestamp    = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
     val shutterDenom = (1_000_000_000.0 / shutterNs).roundToInt()
-    val displayName = "HighSpeed_${fps}fps_ISO${iso}_SS1-${shutterDenom}s_$timestamp.mp4"
-    val description = "${fps} fps | ISO $iso | Shutter 1/${shutterDenom}s | $timestamp"
+    val displayName  = "HighSpeed_${fps}fps_ISO${iso}_SS1-${shutterDenom}s_$timestamp.mp4"
+    val description  = "${fps} fps | ISO $iso | Shutter 1/${shutterDenom}s | $timestamp"
+
+    Mp4MetadataWriter.inject(
+        file   = file,
+        fields = mapOf(
+            "©cmt" to description,
+            "©nam" to displayName,
+            "©day" to timestamp,
+            "©too" to "HighSpeedCamera | ${fps}fps"
+        )
+    )
 
     return try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
