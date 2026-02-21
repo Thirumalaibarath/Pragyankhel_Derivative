@@ -343,16 +343,10 @@ private fun FrameRow(frame: FrameResult) {
             modifier = Modifier.weight(1f)
         )
         Text(
-            "μ %.1f".format(frame.motionMean),
+            "μ %.1f".format(frame.motionValue),
             color    = Color.White.copy(alpha = 0.55f),
             fontSize = 10.sp,
             modifier = Modifier.width(52.dp)
-        )
-        Text(
-            "shp %.0f".format(frame.sharpness),
-            color    = Color.White.copy(alpha = 0.55f),
-            fontSize = 10.sp,
-            modifier = Modifier.width(60.dp)
         )
         StatusBadge(frame.status, frame.dropReason)
     }
@@ -366,10 +360,9 @@ private fun StatusBadge(status: FrameStatus, dropReason: DropReason = DropReason
         FrameStatus.FRAME_MERGE -> "MERGE"  to MergeColor
     }
     val reasonLabel = when (dropReason) {
-        DropReason.DELTA_TIME         -> "Δt gap"
-        DropReason.HIGH_PSNR          -> "PSNR > 50"
-        DropReason.LOW_MEAN_THRESHOLD -> "low motion"
-        DropReason.NONE               -> null
+        DropReason.HIGH_SPIKE -> "motion spike"
+        DropReason.FRAME_FREEZE -> "motion merge"
+        DropReason.NONE -> null
     }
     Column(
         horizontalAlignment = Alignment.End,
