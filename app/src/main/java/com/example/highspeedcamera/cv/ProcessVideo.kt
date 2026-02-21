@@ -4,6 +4,7 @@ import org.opencv.core.Core
 import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.MatOfDouble
+import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import org.opencv.videoio.VideoCapture
 import org.opencv.videoio.Videoio
@@ -16,11 +17,32 @@ enum class FrameStatus {
     FRAME_MERGE
 }
 
-// Mean and Standard Deviation
-data class FrameStats(val mean: Double, val stdDev: Double, val psnr: Double)
-data class FrameData(val img: Mat, var sharpness: Double = 0.0, var timestamp: Double = 0.0, var status: FrameStatus = FrameStatus.NORMAL)
+// Added the diagnostic enum
+enum class DropReason {
+    NONE,
+    DELTA_TIME,
+    HIGH_PSNR,
+    LOW_MEAN_THRESHOLD
+}
 
-fun calculateStats(prev: Mat, curr: Mat) : FrameStats {
+// Added dropReason to the report
+data class FrameReport(
+    val timestampMs: Double,
+    val status: FrameStatus,
+    val dropReason: DropReason,
+    val sharpness: Double,
+    val motionMean: Double
+)
+
+data class FrameStats(val mean: Double, val stdDev: Double, val psnr: Double)
+
+private class FrameState {
+    val img = Mat()
+    var sharpness: Double = 0.0
+    var timestamp: Double = 0.0
+}
+
+fun calculateStats(prev: Mat, curr: Mat): FrameStats {
     val diffMap = Mat()
     val mean = MatOfDouble()
     val stdDev = MatOfDouble()
@@ -34,8 +56,10 @@ fun calculateStats(prev: Mat, curr: Mat) : FrameStats {
     val sseMat = Mat()
     diffMap.convertTo(sseMat, CvType.CV_32F)
     Core.multiply(sseMat, sseMat, sseMat)
+
     val sse = Core.sumElems(sseMat).`val`[0]
-    val mse = sse / (prev.total().toDouble())
+    val mse = sse / prev.total().toDouble()
+
     val psnrVal = if (mse <= 1e-9) Double.POSITIVE_INFINITY else 10.0 * log10((255.0 * 255.0) / mse)
 
     diffMap.release()
@@ -46,10 +70,16 @@ fun calculateStats(prev: Mat, curr: Mat) : FrameStats {
     return FrameStats(mu, sigma, psnrVal)
 }
 
-fun isFrameDrop(prev: Mat, curr: Mat) : Boolean {
-    val stats = calculateStats(prev, curr)
-    val threshold = stats.mean + (2.5 * stats.stdDev)
-    return stats.psnr > 60.0 || stats.mean < threshold
+// Refactored to return the exact reason instead of a boolean
+fun getDropReason(stats: FrameStats): DropReason {
+    if (stats.psnr > 50.0) return DropReason.HIGH_PSNR
+
+    val isStatic = stats.mean < (0.25 * stats.stdDev)
+    val isNegligible = stats.mean < 0.08
+
+    if (isStatic || isNegligible) return DropReason.LOW_MEAN_THRESHOLD
+
+    return DropReason.NONE
 }
 
 fun calculateSharpness(frame: Mat): Double {
@@ -69,42 +99,66 @@ fun calculateSharpness(frame: Mat): Double {
     return variance
 }
 
-fun processVideo(videoPath: String) : MutableList<FrameData> {
-    val frameList = mutableListOf<FrameData>()
+fun processVideo(videoPath: String): List<FrameReport> {
+    val reportList = mutableListOf<FrameReport>()
     val capture = VideoCapture(videoPath)
 
-    if (!capture.isOpened) return frameList
+    if (!capture.isOpened) return reportList
 
     val fps = capture.get(Videoio.CAP_PROP_FPS)
-    val interval = 1000.0 / fps // DeltaT
+    val interval = 1000.0 / fps // Expected Delta T in ms
 
-    val prevFrame = FrameData(Mat())
-    val currFrame = FrameData(Mat())
-    val nextFrame = FrameData(Mat())
+    val prevFrame = FrameState()
+    val currFrame = FrameState()
+    val nextFrame = FrameState()
 
-    // Convert to GrayScale for Faster Calculations
+    fun prepareFrame(sourceMat: Mat, targetState: FrameState, timestamp: Double) {
+//        Imgproc.cvtColor(sourceMat, targetState.img, Imgproc.COLOR_BGR2GRAY)
+        Imgproc.GaussianBlur(targetState.img, targetState.img, Size(3.0, 3.0), 0.0)
+
+        targetState.sharpness = calculateSharpness(targetState.img)
+        targetState.timestamp = timestamp
+    }
+
     if (capture.read(currFrame.img)) {
-        Imgproc.cvtColor(currFrame.img, currFrame.img, Imgproc.COLOR_BGR2GRAY)
-        currFrame.sharpness = calculateSharpness(currFrame.img)
-        currFrame.timestamp = capture.get(Videoio.CAP_PROP_POS_MSEC)
+        val ts = capture.get(Videoio.CAP_PROP_POS_MSEC)
+        prepareFrame(currFrame.img, currFrame, ts)
     }
 
     while (capture.read(nextFrame.img)) {
         val currentMs = capture.get(Videoio.CAP_PROP_POS_MSEC)
-        Imgproc.cvtColor(nextFrame.img, nextFrame.img, Imgproc.COLOR_BGR2GRAY)
-        nextFrame.sharpness = calculateSharpness(nextFrame.img)
-        nextFrame.timestamp = currentMs
+        prepareFrame(nextFrame.img, nextFrame, currentMs)
 
         if (!prevFrame.img.empty()) {
-            val delta = currFrame.timestamp - prevFrame.timestamp // Time Interval
-            currFrame.status = when {
-                delta > (interval * 1.5) -> FrameStatus.FRAME_DROP
-                isFrameDrop(prevFrame.img, currFrame.img) -> FrameStatus.FRAME_DROP
-                currFrame.sharpness < prevFrame.sharpness * 0.35 && currFrame.sharpness < nextFrame.sharpness * 0.35 -> FrameStatus.FRAME_MERGE
-                else -> FrameStatus.NORMAL
+            val delta = currFrame.timestamp - prevFrame.timestamp
+            val stats = calculateStats(prevFrame.img, currFrame.img)
+
+            // Evaluate drop reason
+            val visualDropReason = getDropReason(stats)
+
+            var currentStatus = FrameStatus.NORMAL
+            var currentDropReason = DropReason.NONE
+
+            // Hierarchical classification
+            if (delta > (interval * 1.5)) {
+                currentStatus = FrameStatus.FRAME_DROP
+                currentDropReason = DropReason.DELTA_TIME
+            } else if (visualDropReason != DropReason.NONE) {
+                currentStatus = FrameStatus.FRAME_DROP
+                currentDropReason = visualDropReason
+            } else if (stats.mean > 1.5 &&
+                currFrame.sharpness < (prevFrame.sharpness * 0.4) &&
+                currFrame.sharpness < (nextFrame.sharpness * 0.4)) {
+                currentStatus = FrameStatus.FRAME_MERGE
             }
 
-            frameList.add(FrameData(currFrame.img.clone(), currFrame.sharpness, currFrame.timestamp, currFrame.status))
+            reportList.add(FrameReport(
+                timestampMs = currFrame.timestamp,
+                status = currentStatus,
+                dropReason = currentDropReason,
+                sharpness = currFrame.sharpness,
+                motionMean = stats.mean
+            ))
         }
 
         currFrame.img.copyTo(prevFrame.img)
@@ -116,11 +170,10 @@ fun processVideo(videoPath: String) : MutableList<FrameData> {
         currFrame.timestamp = nextFrame.timestamp
     }
 
-    // Release Matrices
     capture.release()
     prevFrame.img.release()
     currFrame.img.release()
     nextFrame.img.release()
 
-    return frameList
+    return reportList
 }

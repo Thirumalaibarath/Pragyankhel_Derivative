@@ -9,6 +9,7 @@ import com.example.highspeedcamera.camera.HighSpeedCameraViewModel
 import com.example.highspeedcamera.ui.screens.ConfigScreen
 import com.example.highspeedcamera.ui.screens.PermissionsScreen
 import com.example.highspeedcamera.ui.screens.RecordScreen
+import com.example.highspeedcamera.ui.screens.VideoAnalysisScreen
 
 
 @Composable
@@ -32,7 +33,8 @@ fun HighSpeedCameraApp() {
         composable("config") {
             ConfigScreen(
                 viewModel = configVm,
-                onStart   = { navController.navigate("record") }
+                onStart   = { navController.navigate("record") },
+                onAnalyse = { navController.navigate("analysis") }
             )
         }
 
@@ -41,6 +43,12 @@ fun HighSpeedCameraApp() {
                 configVm = configVm,
                 cameraVm = cameraVm,
                 onBack   = { navController.popBackStack() }
+            )
+        }
+
+        composable("analysis") {
+            VideoAnalysisScreen(
+                onBack = { navController.popBackStack() }
             )
         }
     }

@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import com.example.highspeedcamera.ui.ConfigViewModel
@@ -17,7 +18,8 @@ import kotlin.math.roundToLong
 @Composable
 fun ConfigScreen(
     viewModel: ConfigViewModel,
-    onStart: () -> Unit
+    onStart: () -> Unit,
+    onAnalyse: () -> Unit = {}
 ) {
     val cameras      by viewModel.cameraOptions.collectAsState()
     val selectedCamera  by viewModel.selectedCamera.collectAsState()
@@ -171,6 +173,15 @@ fun ConfigScreen(
                 modifier = Modifier.fillMaxWidth().height(56.dp)
             ) {
                 Text("START RECORDING", style = MaterialTheme.typography.titleMedium)
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick  = onAnalyse,
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                colors   = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                border   = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
+            ) {
+                Text("🔍  Analyse Existing Video", style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
