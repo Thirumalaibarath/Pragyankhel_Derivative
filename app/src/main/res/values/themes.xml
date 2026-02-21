@@ -5,4 +5,18 @@
     -->
     <style name="Theme.HighSpeedCamera"
         parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!--
+        Splash theme: shown by the OS immediately on cold start,
+        before onCreate runs. Uses splash.xml as the full-screen
+        window background so there is zero blank-screen flash.
+        MainActivity switches back to Theme.HighSpeedCamera at the
+        top of onCreate before Compose takes over.
+    -->
+    <style name="Theme.HighSpeedCamera.Splash"
+        parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
 </resources>

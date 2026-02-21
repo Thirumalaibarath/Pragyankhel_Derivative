@@ -12,13 +12,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.highspeedcamera.R
 
-// ── Local font: lex.ttf ───────────────────────────────────────────────────────
-
 val LexendMegaFamily: FontFamily = FontFamily(
     Font(R.font.lex)
 )
 
-// ── Color palette ─────────────────────────────────────────────────────────────
 
 private val AppPurple   = Color(0xFF6931FF)
 private val AppOnPurple = Color.White
@@ -35,8 +32,6 @@ private val AppColors = darkColorScheme(
     onError          = Color.White,
 )
 
-// ── Typography (Lexend Mega for every text style) ─────────────────────────────
-
 private val AppTypography = Typography(
     headlineMedium = TextStyle(fontFamily = LexendMegaFamily, fontWeight = FontWeight.Bold,   fontSize = 26.sp),
     headlineSmall  = TextStyle(fontFamily = LexendMegaFamily, fontWeight = FontWeight.Bold,   fontSize = 22.sp),
@@ -51,7 +46,6 @@ private val AppTypography = Typography(
     labelSmall     = TextStyle(fontFamily = LexendMegaFamily, fontWeight = FontWeight.Normal, fontSize = 10.sp),
 )
 
-// ── Theme entry point ─────────────────────────────────────────────────────────
 
 @Composable
 fun HighSpeedCameraTheme(content: @Composable () -> Unit) {
