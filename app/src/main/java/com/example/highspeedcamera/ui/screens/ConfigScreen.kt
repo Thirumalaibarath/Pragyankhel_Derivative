@@ -1,5 +1,6 @@
 package com.example.highspeedcamera.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -7,12 +8,20 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import com.example.highspeedcamera.ui.ConfigViewModel
 import com.example.highspeedcamera.utils.VideoCodec
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
+
+// Shared slider colour tokens
+private val SliderThumbColor        = Color(0xFF444444)   // dark grey thumb
+private val SliderActiveTrack       = Color.White
+private val SliderInactiveTrack     = Color.White.copy(alpha = 0.30f)
+private val SliderActiveTickColor   = Color.Transparent
+private val SliderInactiveTickColor = Color.Transparent
 
 @Composable
 fun ConfigScreen(
@@ -30,7 +39,10 @@ fun ConfigScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .background(Color(0xFF6931FF))
+            .windowInsetsPadding(WindowInsets.systemBars)
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
@@ -72,6 +84,13 @@ fun ConfigScreen(
                     onValueChange = { viewModel.selectedIso.value = it.roundToInt() },
                     valueRange = isoMin.toFloat()..isoMax.toFloat(),
                     steps = ((isoMax - isoMin) / 50).coerceAtLeast(0),
+                    colors = SliderDefaults.colors(
+                        thumbColor           = SliderThumbColor,
+                        activeTrackColor     = SliderActiveTrack,
+                        inactiveTrackColor   = SliderInactiveTrack,
+                        activeTickColor      = SliderActiveTickColor,
+                        inactiveTickColor    = SliderInactiveTickColor
+                    ),
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -97,6 +116,13 @@ fun ConfigScreen(
                     value = shutterNs.toFloat(),
                     onValueChange = { viewModel.selectedShutterNs.value = it.roundToLong() },
                     valueRange = minShutterNs.toFloat()..maxShutterNs.toFloat(),
+                    colors = SliderDefaults.colors(
+                        thumbColor           = SliderThumbColor,
+                        activeTrackColor     = SliderActiveTrack,
+                        inactiveTrackColor   = SliderInactiveTrack,
+                        activeTickColor      = SliderActiveTickColor,
+                        inactiveTickColor    = SliderInactiveTickColor
+                    ),
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -201,7 +227,14 @@ private fun RadioRow(label: String, selected: Boolean, onClick: () -> Unit) {
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        RadioButton(selected = selected, onClick = onClick)
+        RadioButton(
+            selected = selected,
+            onClick  = onClick,
+            colors   = RadioButtonDefaults.colors(
+                selectedColor   = Color.Black,
+                unselectedColor = Color.White
+            )
+        )
         Spacer(Modifier.width(8.dp))
         Text(label, style = MaterialTheme.typography.bodyMedium)
     }

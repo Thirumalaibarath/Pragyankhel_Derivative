@@ -95,7 +95,7 @@ fun RecordScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(Color.Black),
+                .background(MaterialTheme.colorScheme.background),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
@@ -149,7 +149,7 @@ fun RecordScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF1A1A1A))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
                     .padding(vertical = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -169,7 +169,7 @@ fun RecordScreen(
                     RecordingState.RECORDING -> "Recording…  Release to Stop"
                     RecordingState.SAVING    -> "Saving to Gallery…"
                 }
-                Text(statusText, color = Color.White, style = MaterialTheme.typography.bodySmall)
+                Text(statusText, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodySmall)
 
                 val buttonColor = when (state) {
                     RecordingState.RECORDING -> Color.Red
@@ -193,7 +193,7 @@ fun RecordScreen(
 
                 if (state == RecordingState.IDLE) {
                     TextButton(onClick = onBack) {
-                        Text("← Back to settings", color = Color.LightGray)
+                        Text("← Back to settings", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
                     }
                 }
             }
